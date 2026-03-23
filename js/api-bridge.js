@@ -546,6 +546,27 @@ function normalizeDateStr(date) {
   return new Date().toISOString().slice(0, 10);
 }
 
+function encodePendingVoucherCursor(docSnap) {
+  if (!docSnap) return null;
+  const data = docSnap.data?.() || {};
+  const id = String(docSnap.id || "").trim();
+  if (!id) return null;
+
+  const rawUpdatedAt = data.updatedAt;
+  if (rawUpdatedAt == null) return null;
+
+  let updatedAtMs;
+  if (typeof rawUpdatedAt === "number") updatedAtMs = rawUpdatedAt;
+  else if (rawUpdatedAt instanceof Date) updatedAtMs = rawUpdatedAt.getTime();
+  else if (typeof rawUpdatedAt?.toMillis === "function") updatedAtMs = rawUpdatedAt.toMillis();
+  else if (typeof rawUpdatedAt?.seconds === "number") updatedAtMs = rawUpdatedAt.seconds * 1000;
+  else if (typeof rawUpdatedAt === "string") updatedAtMs = new Date(rawUpdatedAt).getTime();
+  else updatedAtMs = NaN;
+
+  if (!Number.isFinite(updatedAtMs)) return null;
+
+  return { id, updatedAtMs };
+}
 class ApiError extends Error {
   constructor(message, status) {
     super(message);
