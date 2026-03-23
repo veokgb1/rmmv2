@@ -257,24 +257,22 @@ async function workerPost(action, payload = {}) {
  * @returns {Promise<{ id: string }>} Firestore 文档 ID
  */
 export async function submitTransaction(txData) {
-  // ── 主链路：写入 Firestore ──
   const { db } = getFirebaseApp();
   const { collection, addDoc, serverTimestamp } = await fsModules();
-
-  const docRef = await addDoc(collection(db, "transactions"), {
-    ...txData,
+  const timestamps = {
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-    source:    txData.source || "手动录入",
-    status:    txData.status || "未关联",
-    voucherPaths: txData.voucherPaths || [],
-  });
+    reviewedAt: serverTimestamp(),
+  };
 
-  // ── 影子链路：异步向 V1 GAS 备份（铁律二）──
-  // 绝不 await，绝不让失败影响主链路
+  const docRef = await addDoc(
+    collection(db, "transactions"),
+    buildTransactionWritePayload(txData, timestamps),
+  );
+
   if (APP_CONFIG.SHADOW_WRITE_ENABLED && APP_CONFIG.GAS_V1_URL) {
     shadowWriteToGas(txData, docRef.id).catch(() => {
-      // 静默忽略，日志已在 shadowWriteToGas 内上报
+      // silent fallback by design
     });
   }
 
@@ -385,13 +383,12 @@ export async function fetchLedger({ month, limit = 100, startAfterDoc } = {}) {
   if (month) constraints.push(where("month", "==", month));
   if (startAfterDoc) constraints.push(startAfter(startAfterDoc));
 
-  const q    = query(collection(db, "transactions"), ...constraints);
+  const q = query(collection(db, "transactions"), ...constraints);
   const snap = await getDocs(q);
 
-  return snap.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-    _snap: doc, // 保留快照用于分页
+  return snap.docs.map((docSnap) => normalizeTransactionRecord(docSnap.data(), {
+    id: docSnap.id,
+    snap: docSnap,
   }));
 }
 
@@ -403,10 +400,13 @@ export async function fetchLedger({ month, limit = 100, startAfterDoc } = {}) {
 export async function updateTransaction(txId, updates) {
   const { db } = getFirebaseApp();
   const { doc, updateDoc, serverTimestamp } = await fsModules();
-  await updateDoc(doc(db, "transactions", txId), {
-    ...updates,
-    updatedAt: serverTimestamp(),
-  });
+  await updateDoc(
+    doc(db, "transactions", txId),
+    buildTransactionUpdatePayload(updates, {
+      updatedAt: serverTimestamp(),
+      reviewedAt: serverTimestamp(),
+    }),
+  );
 }
 
 /**
@@ -414,7 +414,14 @@ export async function updateTransaction(txId, updates) {
  * @param {string} txId
  */
 export async function deleteTransaction(txId) {
-  await updateTransaction(txId, { _deleted: true, status: "已删除" });
+  await updateTransaction(txId, {
+    _deleted: true,
+    status: "\u5df2\u5220\u9664",
+    lifecycleState: "deleted",
+    decisionSource: "manual",
+    pendingReason: null,
+    decisionNote: buildDecisionTrailEntry("manual delete record"),
+  });
 }
 
 /**
@@ -422,13 +429,62 @@ export async function deleteTransaction(txId) {
  * @param {string}   txId
  * @param {string[]} pathsToRemove - Storage 路径数组
  */
-export async function unbindVouchers(txId, pathsToRemove) {
+export async function unbindVouchers(txId, pathsToRemove, options = {}) {
   const { db } = getFirebaseApp();
-  const { doc, updateDoc, arrayRemove, serverTimestamp } = await fsModules();
-  await updateDoc(doc(db, "transactions", txId), {
-    voucherPaths: arrayRemove(...pathsToRemove),
-    updatedAt:    serverTimestamp(),
+  const { doc, getDoc, updateDoc, serverTimestamp } = await fsModules();
+  const txRef = doc(db, "transactions", txId);
+  const txSnap = await getDoc(txRef);
+  if (!txSnap.exists()) throw new ApiError("Transaction not found", 404);
+
+  const current = normalizeTransactionRecord(txSnap.data(), {
+    id: txSnap.id,
+    snap: txSnap,
   });
+  const removeSet = new Set(
+    (Array.isArray(pathsToRemove) ? pathsToRemove : [])
+      .map((pathValue) => String(pathValue || "").trim())
+      .filter(Boolean),
+  );
+
+  if (!removeSet.size) {
+    return { remainingPaths: current.voucherStoragePaths || [], updatedVoucherDocs: 0 };
+  }
+
+  const nextVoucherPaths = (current.voucherStoragePaths || []).filter(
+    (pathValue) => !removeSet.has(String(pathValue)),
+  );
+  const removedPaths = (current.voucherStoragePaths || []).filter(
+    (pathValue) => removeSet.has(String(pathValue)),
+  );
+  const noteEntry = buildDecisionTrailEntry(
+    options.decisionNote || ('manual unbind ' + removedPaths.length + ' vouchers'),
+  );
+
+  await updateDoc(txRef, {
+    voucherPaths: nextVoucherPaths,
+    voucherStoragePaths: nextVoucherPaths,
+    status: nextVoucherPaths.length ? current.status : "\u5f85\u7eed\u5173\u8054",
+    lifecycleState: nextVoucherPaths.length ? "active" : "pending_link",
+    pendingReason: nextVoucherPaths.length ? null : (options.pendingReason || "manual_unbind"),
+    decisionSource: options.decisionSource || "manual",
+    decisionNote: appendDecisionTrail(current.decisionNote, noteEntry),
+    lastReviewedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  const updatedVoucherDocs = await markVouchersPendingByStoragePaths(removedPaths, {
+    txId,
+    legacyRowNum: current._legacyRowNum ?? null,
+    pendingReason: options.pendingReason || "manual_unbind",
+    decisionSource: options.decisionSource || "manual",
+    decisionNote: noteEntry,
+  });
+
+  return {
+    remainingPaths: nextVoucherPaths,
+    removedPaths,
+    updatedVoucherDocs,
+  };
 }
 
 // ── AI 功能（通过 Worker 代理，Key 不暴露）────────────
@@ -438,6 +494,203 @@ export async function unbindVouchers(txId, pathsToRemove) {
  * @param {{ base64: string, mime: string }} params
  * @returns {Promise<object>} AI 识别结果
  */
+export async function fetchPendingVouchers({
+  limit = 100,
+  pageSize,
+  cursor = null,
+  returnMeta = false,
+} = {}) {
+  const wantsCursorMeta = Boolean(returnMeta || cursor || pageSize);
+  const resolvedPageSize = clampPendingPageSize(pageSize ?? limit);
+  if (!wantsCursorMeta) {
+    return fetchPendingVouchersLegacyList({ limit: resolvedPageSize });
+  }
+
+  const { db } = getFirebaseApp();
+  try {
+    const {
+      collection, query, where, orderBy,
+      limit: fsLimit, startAfter, getDocs,
+      documentId, Timestamp,
+    } = await fsModules();
+    const constraints = [
+      where("lifecycleState", "==", "pending_link"),
+      // stable order: updatedAt desc + document id asc
+      orderBy("updatedAt", "desc"),
+      orderBy(documentId(), "asc"),
+      fsLimit(resolvedPageSize + 1),
+    ];
+    const parsedCursor = normalizePendingVoucherCursor(cursor);
+    if (parsedCursor) {
+      const cursorTs = Timestamp?.fromMillis
+        ? Timestamp.fromMillis(parsedCursor.updatedAtMs)
+        : new Date(parsedCursor.updatedAtMs);
+      constraints.push(startAfter(cursorTs, parsedCursor.id));
+    }
+
+    const snap = await getDocs(query(collection(db, "vouchers"), ...constraints));
+    const docs = snap.docs || [];
+    const pageDocs = docs.slice(0, resolvedPageSize);
+    const list = pageDocs.map((docSnap) => normalizePendingVoucher(docSnap.data(), docSnap.id));
+    const hasMore = docs.length > resolvedPageSize;
+    const nextCursor = hasMore && pageDocs.length
+      ? encodePendingVoucherCursor(pageDocs[pageDocs.length - 1])
+      : null;
+
+    return {
+      list,
+      nextCursor,
+      hasMore,
+      pageSize: resolvedPageSize,
+      fallback: false,
+    };
+  } catch (err) {
+    // fallback for environments lacking required composite index / cursor support
+    const list = await fetchPendingVouchersLegacyList({ limit: resolvedPageSize });
+    return {
+      list,
+      nextCursor: null,
+      hasMore: list.length >= resolvedPageSize,
+      pageSize: resolvedPageSize,
+      fallback: true,
+      fallbackMode: "step",
+      fallbackReason: classifyPendingFallbackReason(err),
+      fallbackDetail: String(err?.message || err || "pending cursor fallback"),
+    };
+  }
+}
+
+export async function fetchTempTransactions({ limit = 100 } = {}) {
+  const { db } = getFirebaseApp();
+  const { collection, query, where, limit: fsLimit, getDocs } = await fsModules();
+  const snap = await getDocs(
+    query(
+      collection(db, "transactions"),
+      where("recordBucket", "==", "temp"),
+      fsLimit(limit),
+    ),
+  );
+
+  return snap.docs
+    .map((docSnap) => normalizeTransactionRecord(docSnap.data(), {
+      id: docSnap.id,
+      snap: docSnap,
+    }))
+    .sort((left, right) => sortByLatestDesc(left, right));
+}
+
+export async function promoteTempTransaction(txId, options = {}) {
+  const { db } = getFirebaseApp();
+  const { doc, getDoc } = await fsModules();
+  const txRef = doc(db, "transactions", txId);
+  const txSnap = await getDoc(txRef);
+  if (!txSnap.exists()) throw new ApiError("Transaction not found", 404);
+
+  const txData = normalizeTransactionRecord(txSnap.data(), {
+    id: txSnap.id,
+    snap: txSnap,
+  });
+
+  await updateTransaction(txId, {
+    recordBucket: "formal",
+    pendingReason: null,
+    lifecycleState: "active",
+    difficultyState: options.difficultyState ?? null,
+    difficultyDoneAt: options.difficultyDoneAt ?? null,
+    difficultyDoneReason: options.difficultyDoneReason ?? null,
+    decisionSource: options.decisionSource || "manual",
+    decisionNote: appendDecisionTrail(
+      txData.decisionNote,
+      buildDecisionTrailEntry(options.decisionNote || "promote temp transaction"),
+    ),
+  });
+}
+
+export async function relinkVoucherToTransaction({ voucherId, storagePath, txId }) {
+  const { db } = getFirebaseApp();
+  const { doc, getDoc, updateDoc, serverTimestamp } = await fsModules();
+
+  const txRef = doc(db, "transactions", txId);
+  const txSnap = await getDoc(txRef);
+  if (!txSnap.exists()) throw new ApiError("Transaction not found", 404);
+
+  const txData = normalizeTransactionRecord(txSnap.data(), {
+    id: txSnap.id,
+    snap: txSnap,
+  });
+  const nextVoucherPaths = uniqueStrings([
+    ...(txData.voucherStoragePaths || []),
+    storagePath,
+  ]);
+
+  await updateDoc(txRef, {
+    voucherPaths: nextVoucherPaths,
+    voucherStoragePaths: nextVoucherPaths,
+    status: "\u4eba\u5de5\u5173\u8054",
+    lifecycleState: "active",
+    pendingReason: null,
+    decisionSource: "manual",
+    decisionNote: appendDecisionTrail(
+      txData.decisionNote,
+      buildDecisionTrailEntry("relink voucher to transaction"),
+    ),
+    lastReviewedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  const updatedVoucherDocs = await markVoucherLinked(voucherId, storagePath, {
+    txId,
+    legacyRowNum: txData._legacyRowNum ?? null,
+    decisionNote: buildDecisionTrailEntry("relink to transaction"),
+  });
+
+  return {
+    txId,
+    voucherId,
+    updatedVoucherDocs,
+  };
+}
+
+export async function markVoucherDifficultyDone({
+  voucherId,
+  storagePath,
+  decisionNote = "mark difficulty as done",
+  decisionSource = "manual",
+  difficultyDoneReason = "difficulty_center_done",
+} = {}) {
+  const { db } = getFirebaseApp();
+  const { doc, getDoc, query, collection, where, getDocs, updateDoc, serverTimestamp } = await fsModules();
+
+  let docs = [];
+  if (voucherId) {
+    const directRef = doc(db, "vouchers", voucherId);
+    const directSnap = await getDoc(directRef);
+    if (directSnap.exists()) docs = [directSnap];
+  }
+  if (!docs.length && storagePath) {
+    const snap = await getDocs(
+      query(collection(db, "vouchers"), where("storagePath", "==", storagePath)),
+    );
+    docs = snap.docs;
+  }
+
+  let updated = 0;
+  const noteEntry = buildDecisionTrailEntry(decisionNote);
+  for (const voucherDoc of docs) {
+    const data = voucherDoc.data() || {};
+    await updateDoc(voucherDoc.ref, {
+      difficultyState: "done",
+      difficultyDoneAt: serverTimestamp(),
+      difficultyDoneReason,
+      decisionSource,
+      decisionNote: appendDecisionTrail(data.decisionNote, noteEntry),
+      lastReviewedAt: serverTimestamp(),
+    });
+    updated += 1;
+  }
+
+  return updated;
+}
 export async function geminiOCR({ base64, mime }) {
   const result = await workerPost("gemini_ocr", { base64, mime });
   return result.data;
@@ -546,6 +799,338 @@ function normalizeDateStr(date) {
   return new Date().toISOString().slice(0, 10);
 }
 
+function normalizeTransactionRecord(data = {}, { id = "", snap = null } = {}) {
+  const mergedVoucherPaths = mergeVoucherPaths(data);
+  return {
+    id,
+    ...data,
+    ...mergedVoucherPaths,
+    recordBucket: data.recordBucket || "formal",
+    lifecycleState: data.lifecycleState || deriveLifecycleState(data),
+    pendingReason: data.pendingReason ?? null,
+    difficultyState: data.difficultyState || deriveDifficultyState(data),
+    difficultyDoneAt: data.difficultyDoneAt || deriveDifficultyDoneAt(data),
+    difficultyDoneReason: data.difficultyDoneReason || deriveDifficultyDoneReason(data),
+    decisionSource: data.decisionSource || deriveDecisionSource(data),
+    decisionNote: String(data.decisionNote || ""),
+    lastReviewedAt: data.lastReviewedAt || null,
+    _snap: snap,
+  };
+}
+
+function buildTransactionWritePayload(txData = {}, timestamps = {}) {
+  const normalized = normalizeTransactionRecord(txData);
+  return {
+    ...txData,
+    voucherPaths: normalized.voucherPaths,
+    voucherStoragePaths: normalized.voucherStoragePaths,
+    source: txData.source || "\u624b\u52a8\u5f55\u5165",
+    status: txData.status || "\u672a\u5173\u8054",
+    recordBucket: txData.recordBucket || normalized.recordBucket,
+    lifecycleState: txData.lifecycleState || normalized.lifecycleState,
+    pendingReason: txData.pendingReason ?? normalized.pendingReason,
+    difficultyState: txData.difficultyState ?? normalized.difficultyState,
+    difficultyDoneAt: txData.difficultyDoneAt ?? normalized.difficultyDoneAt ?? null,
+    difficultyDoneReason: txData.difficultyDoneReason ?? normalized.difficultyDoneReason ?? null,
+    decisionSource: txData.decisionSource || normalized.decisionSource,
+    decisionNote: txData.decisionNote || normalized.decisionNote,
+    lastReviewedAt: txData.lastReviewedAt || timestamps.reviewedAt || null,
+    createdAt: timestamps.createdAt,
+    updatedAt: timestamps.updatedAt,
+  };
+}
+
+function buildTransactionUpdatePayload(updates = {}, timestamps = {}) {
+  const payload = {
+    ...updates,
+    updatedAt: timestamps.updatedAt,
+  };
+
+  if ("voucherPaths" in updates || "voucherStoragePaths" in updates) {
+    const mergedVoucherPaths = mergeVoucherPaths(updates);
+    payload.voucherPaths = mergedVoucherPaths.voucherPaths;
+    payload.voucherStoragePaths = mergedVoucherPaths.voucherStoragePaths;
+  }
+
+  if ("recordBucket" in updates) {
+    payload.recordBucket = updates.recordBucket || "formal";
+  }
+
+  if (
+    "difficultyState" in updates ||
+    "difficultyDoneAt" in updates ||
+    "difficultyDoneReason" in updates
+  ) {
+    if ("difficultyState" in updates) {
+      payload.difficultyState = updates.difficultyState ?? null;
+    }
+    if ("difficultyDoneAt" in updates) {
+      payload.difficultyDoneAt = updates.difficultyDoneAt ?? null;
+    } else if (updates.difficultyState === "done") {
+      payload.difficultyDoneAt = timestamps.reviewedAt || null;
+    } else if ("difficultyState" in updates) {
+      payload.difficultyDoneAt = null;
+    }
+
+    if ("difficultyDoneReason" in updates) {
+      payload.difficultyDoneReason = updates.difficultyDoneReason ?? null;
+    } else if ("difficultyState" in updates && updates.difficultyState !== "done") {
+      payload.difficultyDoneReason = null;
+    }
+  }
+
+  if (
+    "lifecycleState" in updates ||
+    "pendingReason" in updates ||
+    "decisionSource" in updates ||
+    "decisionNote" in updates ||
+    "difficultyState" in updates ||
+    "difficultyDoneAt" in updates ||
+    "difficultyDoneReason" in updates
+  ) {
+    payload.lastReviewedAt = updates.lastReviewedAt || timestamps.reviewedAt || null;
+  }
+
+  return payload;
+}
+
+function mergeVoucherPaths(data = {}) {
+  const merged = uniqueStrings([
+    ...(Array.isArray(data.voucherStoragePaths) ? data.voucherStoragePaths : []),
+    ...(Array.isArray(data.voucherPaths) ? data.voucherPaths : []),
+  ]);
+  return {
+    voucherPaths: merged,
+    voucherStoragePaths: merged,
+  };
+}
+
+function uniqueStrings(values = []) {
+  return [...new Set(values.map((item) => String(item || "").trim()).filter(Boolean))];
+}
+
+function deriveLifecycleState(data = {}) {
+  if (data._deleted || data.status === "\u5df2\u5220\u9664") return "deleted";
+  if (data.pendingReason) return "pending_link";
+  if (data.status === "\u5f85\u7eed\u5173\u8054") return "pending_link";
+  return "active";
+}
+
+function deriveDecisionSource(data = {}) {
+  if (data.status === "\u667a\u80fd\u5173\u8054") return "system";
+  if (data.status === "\u4eba\u5de5\u5173\u8054") return "manual";
+  if (data.status === "\u5f85\u7eed\u5173\u8054") return "manual";
+  return "manual";
+}
+
+function deriveDifficultyState(data = {}) {
+  return String(data.decisionNote || "").includes("difficulty_center_done") ? "done" : null;
+}
+
+function deriveDifficultyDoneAt(data = {}) {
+  if (!String(data.decisionNote || "").includes("difficulty_center_done")) return null;
+  return data.difficultyDoneAt || data.lastReviewedAt || data.updatedAt || null;
+}
+
+function deriveDifficultyDoneReason(data = {}) {
+  if (!String(data.decisionNote || "").includes("difficulty_center_done")) return null;
+  return data.difficultyDoneReason || "difficulty_center_done";
+}
+
+function buildDecisionTrailEntry(message) {
+  const stamp = new Date().toISOString();
+  return '[' + stamp + '] ' + String(message || "").trim();
+}
+
+function appendDecisionTrail(existingNote, newEntry) {
+  const current = String(existingNote || "").trim();
+  if (!current) return newEntry;
+  return current + '\n' + newEntry;
+}
+
+async function markVouchersPendingByStoragePaths(storagePaths = [], context = {}) {
+  if (!storagePaths.length) return 0;
+
+  const { db } = getFirebaseApp();
+  const { collection, query, where, getDocs, updateDoc, serverTimestamp } = await fsModules();
+  let updated = 0;
+
+  for (const storagePath of storagePaths) {
+    const snap = await getDocs(
+      query(collection(db, "vouchers"), where("storagePath", "==", storagePath)),
+    );
+    for (const voucherDoc of snap.docs) {
+      const data = voucherDoc.data() || {};
+      const linkedIds = Array.isArray(data.linkedTransactionIds)
+        ? data.linkedTransactionIds.filter((id) => id !== context.txId)
+        : [];
+      const linkedKeys = Array.isArray(data.linkedTransactionKeys)
+        ? data.linkedTransactionKeys.filter((key) => key !== context.legacyRowNum)
+        : [];
+
+      await updateDoc(voucherDoc.ref, {
+        linkedTransactionIds: linkedIds,
+        linkedTransactionKeys: linkedKeys,
+        lifecycleState: "pending_link",
+        pendingReason: context.pendingReason || "manual_unbind",
+        difficultyState: null,
+        difficultyDoneAt: null,
+        difficultyDoneReason: null,
+        decisionSource: context.decisionSource || "manual",
+        decisionNote: appendDecisionTrail(data.decisionNote, context.decisionNote),
+        lastReviewedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      updated += 1;
+    }
+  }
+
+  return updated;
+}
+
+function normalizePendingVoucher(data = {}, id = "") {
+  return {
+    id,
+    ...data,
+    lifecycleState: data.lifecycleState || "pending_link",
+    pendingReason: data.pendingReason || null,
+    difficultyState: data.difficultyState || deriveDifficultyState(data),
+    difficultyDoneAt: data.difficultyDoneAt || deriveDifficultyDoneAt(data),
+    difficultyDoneReason: data.difficultyDoneReason || deriveDifficultyDoneReason(data),
+    decisionSource: data.decisionSource || "manual",
+    decisionNote: String(data.decisionNote || ""),
+    linkedTransactionIds: Array.isArray(data.linkedTransactionIds) ? data.linkedTransactionIds : [],
+    linkedTransactionKeys: Array.isArray(data.linkedTransactionKeys) ? data.linkedTransactionKeys : [],
+    latestAt: data.lastReviewedAt || data.updatedAt || data.createdAt || null,
+  };
+}
+
+function clampPendingPageSize(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return 100;
+  return Math.max(1, Math.min(200, Math.floor(num)));
+}
+
+async function fetchPendingVouchersLegacyList({ limit = 100 } = {}) {
+  const { db } = getFirebaseApp();
+  const { collection, query, where, limit: fsLimit, getDocs } = await fsModules();
+  const snap = await getDocs(
+    query(
+      collection(db, "vouchers"),
+      where("lifecycleState", "==", "pending_link"),
+      fsLimit(clampPendingPageSize(limit)),
+    ),
+  );
+  return snap.docs
+    .map((docSnap) => normalizePendingVoucher(docSnap.data(), docSnap.id))
+    .sort((left, right) => {
+      const diff = toMillis(right.updatedAt) - toMillis(left.updatedAt);
+      if (diff !== 0) return diff;
+      return String(left.id || "").localeCompare(String(right.id || ""));
+    });
+}
+
+function normalizePendingVoucherCursor(cursor) {
+  if (!cursor) return null;
+  let input = cursor;
+  if (typeof input === "string") {
+    try {
+      input = JSON.parse(input);
+    } catch {
+      return null;
+    }
+  }
+  const id = String(input?.id || "").trim();
+  const updatedAtMs = Number(input?.updatedAtMs);
+  if (!id || !Number.isFinite(updatedAtMs)) return null;
+  return { id, updatedAtMs };
+}
+
+function encodePendingVoucherCursor(docSnap) {
+  if (!docSnap) return null;
+  const data = docSnap.data?.() || {};
+  const id = String(docSnap.id || "").trim();
+  if (!id) return null;
+  // Only use updatedAt — the same field as orderBy("updatedAt"). Falling back to
+  // lastReviewedAt / createdAt would produce a timestamp that doesn't align with
+  // the Firestore index, causing startAfter to land at the wrong position.
+  const rawUpdatedAt = data.updatedAt;
+  if (rawUpdatedAt == null) return null;          // missing field → no cursor
+  const updatedAtMs = toMillis(rawUpdatedAt);
+  if (!Number.isFinite(updatedAtMs)) return null; // unparseable value → no cursor
+  return { id, updatedAtMs };
+}
+
+function classifyPendingFallbackReason(error) {
+  const message = String(error?.message || error || "").toLowerCase();
+  if (!message) return "cursor_query_failed";
+  if (message.includes("failed_precondition") || message.includes("index")) {
+    return "index_missing";
+  }
+  return "cursor_query_failed";
+}
+
+function sortByLatestDesc(left, right) {
+  return toMillis(right.latestAt || right.updatedAt || right.lastReviewedAt) - toMillis(left.latestAt || left.updatedAt || left.lastReviewedAt);
+}
+
+function toMillis(value) {
+  if (!value) return 0;
+  if (typeof value === "number") return value;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "string") {
+    const ms = Date.parse(value);
+    return Number.isFinite(ms) ? ms : 0;
+  }
+  if (typeof value === "object" && typeof value.seconds === "number") {
+    return value.seconds * 1000;
+  }
+  return 0;
+}
+
+async function markVoucherLinked(voucherId, storagePath, context = {}) {
+  const { db } = getFirebaseApp();
+  const { doc, getDoc, query, collection, where, getDocs, updateDoc, serverTimestamp } = await fsModules();
+
+  let docs = [];
+  if (voucherId) {
+    const directRef = doc(db, "vouchers", voucherId);
+    const directSnap = await getDoc(directRef);
+    if (directSnap.exists()) docs = [directSnap];
+  }
+  if (!docs.length && storagePath) {
+    const snap = await getDocs(
+      query(collection(db, "vouchers"), where("storagePath", "==", storagePath)),
+    );
+    docs = snap.docs;
+  }
+
+  let updated = 0;
+  for (const voucherDoc of docs) {
+    const data = voucherDoc.data() || {};
+    const linkedIds = uniqueStrings([...(Array.isArray(data.linkedTransactionIds) ? data.linkedTransactionIds : []), context.txId]);
+    const linkedKeys = context.legacyRowNum == null
+      ? (Array.isArray(data.linkedTransactionKeys) ? data.linkedTransactionKeys : [])
+      : uniqueStrings([...(Array.isArray(data.linkedTransactionKeys) ? data.linkedTransactionKeys : []), context.legacyRowNum]);
+
+    await updateDoc(voucherDoc.ref, {
+      linkedTransactionIds: linkedIds,
+      linkedTransactionKeys: linkedKeys,
+      lifecycleState: "active",
+      pendingReason: null,
+      difficultyState: null,
+      difficultyDoneAt: null,
+      difficultyDoneReason: null,
+      decisionSource: "manual",
+      decisionNote: appendDecisionTrail(data.decisionNote, context.decisionNote),
+      lastReviewedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    updated += 1;
+  }
+
+  return updated;
+}
 class ApiError extends Error {
   constructor(message, status) {
     super(message);
