@@ -603,6 +603,9 @@ async function openBatchMatching() {
 // 鈹€鈹€ 鍔熻兘 鈶ｏ細蹇嵎璁拌处 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 function openQuickEntry() {
+  let currentCandidate = null;
+  let candidateConfirmed = false;
+
   const getToday = () => {
     const now = new Date();
     const year = now.getFullYear();
@@ -659,6 +662,11 @@ function openQuickEntry() {
         <div id="quick-candidate" class="mt-2 space-y-2 text-xs text-gray-600 dark:text-gray-300"></div>
       </section>
 
+      <button id="quick-confirm"
+        class="w-full mb-4 py-2 rounded-xl bg-teal-600/40 text-white text-xs font-medium transition-colors opacity-60">
+        \u786e\u8ba4\u8bb0\u5f55
+      </button>
+
       <div class="flex gap-2">
         <button id="quick-close" class="px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-xs text-gray-600 dark:text-gray-300">
           \u5173\u95ed
@@ -677,6 +685,7 @@ function openQuickEntry() {
   const textInput = overlay.querySelector("#quick-text");
   const candidateWrap = overlay.querySelector("#quick-candidate-wrap");
   const candidateEl = overlay.querySelector("#quick-candidate");
+  const confirmBtn = overlay.querySelector("#quick-confirm");
   imageInput?.addEventListener("change", () => {
     const file = imageInput.files && imageInput.files[0];
     imageName.textContent = file ? file.name : "\u5c1a\u672a\u9009\u62e9\u6587\u4ef6";
@@ -691,6 +700,8 @@ function openQuickEntry() {
     }
 
     const candidate = buildLocalCandidate(text);
+    currentCandidate = candidate;
+    candidateConfirmed = false;
     candidateWrap?.classList.remove("hidden");
     candidateEl.innerHTML = `
       <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/70 p-3 space-y-1.5">
@@ -715,6 +726,24 @@ function openQuickEntry() {
           <span class="text-right text-gray-900 dark:text-gray-100">${candidate.category}</span>
         </div>
       </div>`;
+
+    confirmBtn.className = "w-full mb-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium transition-colors";
+    confirmBtn.textContent = "\u786e\u8ba4\u8bb0\u5f55";
+  });
+
+  confirmBtn?.addEventListener("click", () => {
+    if (!currentCandidate) {
+      showToast("\u8bf7\u5148\u751f\u6210\u5019\u9009\u8bb0\u5f55", "info", 2000);
+      return;
+    }
+
+    if (candidateConfirmed) return;
+
+    candidateConfirmed = true;
+    confirmBtn.disabled = true;
+    confirmBtn.className = "w-full mb-4 py-2 rounded-xl bg-teal-600/50 text-white text-xs font-medium transition-colors opacity-70 cursor-not-allowed";
+    confirmBtn.textContent = "\u5df2\u786e\u8ba4";
+    showToast("\u5019\u9009\u8bb0\u5f55\u5df2\u786e\u8ba4\uff08\u672a\u5165\u5e93\uff09", "success", 2000);
   });
 }
 
