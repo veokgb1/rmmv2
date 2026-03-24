@@ -1,7 +1,7 @@
-// v2-app/js/feature-logic.js
-// 职责：核心业务逻辑、1-9 键响应、AI 调度、应用状态流转
-// 依赖：js/core-config.js, js/api-bridge.js, js/ui-layout.js, js/match-engine.js
-// 导出：initApp
+﻿// v2-app/js/feature-logic.js
+// 鑱岃矗锛氭牳蹇冧笟鍔￠€昏緫銆?-9 閿搷搴斻€丄I 璋冨害銆佸簲鐢ㄧ姸鎬佹祦杞?
+// 渚濊禆锛歫s/core-config.js, js/api-bridge.js, js/ui-layout.js, js/match-engine.js
+// 瀵煎嚭锛歩nitApp
 
 import { APP_CONFIG, KEY_MAP, getFirebaseApp } from "./core-config.js";
 import {
@@ -23,7 +23,7 @@ import {
 }                                         from "./ui-layout.js";
 import { findBestMatch, calculateMatchScore } from "./match-engine.js";
 
-// ── 应用状态 ──────────────────────────────────────────
+// 鈹€鈹€ 搴旂敤鐘舵€?鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 const state = {
   user:         null,
   transactions: [],
@@ -35,13 +35,13 @@ const state = {
 
 const FALLBACK_IMAGE_URL = "/fallback.png";
 
-// ── 入口：初始化整个应用 ──────────────────────────────
+// 鈹€鈹€ 鍏ュ彛锛氬垵濮嬪寲鏁翠釜搴旂敤 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 /**
- * 应用初始化（index.html 中 type="module" 调用）
+ * 搴旂敤鍒濆鍖栵紙index.html 涓?type="module" 璋冪敤锛?
  */
 export async function initApp() {
-  // 监听 Firebase Auth 状态
+  // 鐩戝惉 Firebase Auth 鐘舵€?
   const unsubscribe = await onAuthChange(async (user) => {
     if (user) {
       state.user = user;
@@ -52,29 +52,29 @@ export async function initApp() {
       state.user = null;
       showLoginScreen(async (email, password) => {
         await loginUser({ email, password });
-        // onAuthChange 会自动触发上面的 user 分支
+        // onAuthChange 浼氳嚜鍔ㄨЕ鍙戜笂闈㈢殑 user 鍒嗘敮
       });
     }
   });
 
-  // 离开页面时取消监听
+  // 绂诲紑椤甸潰鏃跺彇娑堢洃鍚?
   window.addEventListener("beforeunload", unsubscribe);
 }
 
-// ── App Shell 事件绑定（登录后执行一次）──────────────
+// 鈹€鈹€ App Shell 浜嬩欢缁戝畾锛堢櫥褰曞悗鎵ц涓€娆★級鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 function bindShellEvents() {
-  // Tab 切换
+  // Tab 鍒囨崲
   document.querySelectorAll(".tab-btn").forEach((btn) => {
     btn.addEventListener("click", () => switchTab(btn.dataset.tab));
   });
 
-  // FAB 唤起抽屉
+  // FAB 鍞よ捣鎶藉眽
   document.getElementById("fab-add")?.addEventListener("click", () => {
     openDrawer(handleKeyAction);
   });
 
-  // 底部导航（目前仅 ledger 有内容）
+  // 搴曢儴瀵艰埅锛堢洰鍓嶄粎 ledger 鏈夊唴瀹癸級
   document.querySelectorAll(".nav-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const nav = btn.dataset.nav;
@@ -83,27 +83,27 @@ function bindShellEvents() {
       if (nav === "dashboard") switchTab("stats");
       if (nav === "search") switchTab("cal");
       if (nav === "settings") {
-        showToast("设置页开发中，当前先保留占位入口", "info");
+        showToast("璁剧疆椤靛紑鍙戜腑锛屽綋鍓嶅厛淇濈暀鍗犱綅鍏ュ彛", "info");
       }
     });
   });
 
-  // 双盲横幅：查看对比按钮
+  // 鍙岀洸妯箙锛氭煡鐪嬪姣旀寜閽?
   document.getElementById("banner-compare-btn")?.addEventListener("click", () => {
-    showToast("双盲核对：点击任意账目卡片可对比新旧凭证图片", "info", 4000);
+    showToast("鍙岀洸鏍稿锛氱偣鍑讳换鎰忚处鐩崱鐗囧彲瀵规瘮鏂版棫鍑瘉鍥剧墖", "info", 4000);
   });
 
-  // 月份切换
+  // 鏈堜唤鍒囨崲
   document.getElementById("month-picker")?.addEventListener("click", openMonthPickerPanel);
 
-  // 日历上下月按钮（动态渲染后绑定）
+  // 鏃ュ巻涓婁笅鏈堟寜閽紙鍔ㄦ€佹覆鏌撳悗缁戝畾锛?
   document.getElementById("pane-cal")?.addEventListener("click", (e) => {
     if (e.target.closest("#cal-prev")) navigateMonth(-1);
     if (e.target.closest("#cal-next")) navigateMonth(1);
   });
 }
 
-// ── Tab 切换 ──────────────────────────────────────────
+// 鈹€鈹€ Tab 鍒囨崲 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 function switchTab(tabName) {
   state.activeTab = tabName;
@@ -148,7 +148,7 @@ function activateBottomNav(navName) {
   });
 }
 
-// ── 数据加载与渲染 ────────────────────────────────────
+// 鈹€鈹€ 鏁版嵁鍔犺浇涓庢覆鏌?鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 async function loadAndRender() {
   if (state.isLoading) return;
@@ -161,7 +161,7 @@ async function loadAndRender() {
     renderLedger(state.transactions, handleTxClick);
     updateMonthLabel();
   } catch (err) {
-    showToast(`加载失败：${err.message}`, "error");
+    showToast(`鍔犺浇澶辫触锛?{err.message}`, "error");
     state.transactions = [];
     renderLedger(state.transactions, handleTxClick);
     updateMonthLabel();
@@ -173,11 +173,10 @@ async function loadAndRender() {
 
 function updateMonthLabel() {
   const el = document.getElementById("current-month-label");
-  if (el) el.textContent = `${state.currentYear}年${state.currentMonth + 1}月`;
-  if (el) el.textContent = `${state.currentYear}年${state.currentMonth + 1}月`;
+  if (el) el.textContent = `${state.currentYear}\u5e74${state.currentMonth + 1}\u6708`;
 }
 
-// ── 月份导航 ──────────────────────────────────────────
+// 鈹€鈹€ 鏈堜唤瀵艰埅 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 function navigateMonth(delta) {
   let m = state.currentMonth + delta;
@@ -192,20 +191,20 @@ function navigateMonth(delta) {
 function showMonthPicker() {
   openMonthPickerPanel();
   return;
-  // 简单 prompt（后续可替换为底部滚轮选择器）
+  // 绠€鍗?prompt锛堝悗缁彲鏇挎崲涓哄簳閮ㄦ粴杞€夋嫨鍣級
   const input = prompt(
-    "输入要查看的月份（格式 YYYY-MM，留空=本月）：",
+    "杈撳叆瑕佹煡鐪嬬殑鏈堜唤锛堟牸寮?YYYY-MM锛岀暀绌?鏈湀锛夛細",
     `${state.currentYear}-${String(state.currentMonth + 1).padStart(2, "0")}`
   );
   if (!input) return;
   const match = input.match(/^(\d{4})-(\d{1,2})$/);
-  if (!match) { showToast("格式错误，请输入 YYYY-MM", "error"); return; }
+  if (!match) { showToast("鏍煎紡閿欒锛岃杈撳叆 YYYY-MM", "error"); return; }
   state.currentYear  = parseInt(match[1]);
   state.currentMonth = parseInt(match[2]) - 1;
   loadAndRender();
 }
 
-// ── 账目卡片点击 ──────────────────────────────────────
+// 鈹€鈹€ 璐︾洰鍗＄墖鐐瑰嚮 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 function openMonthPickerPanel() {
   const appRoot = document.getElementById("app-root");
@@ -232,7 +231,7 @@ function openMonthPickerPanel() {
       return `
         <button data-month="${idx}"
           class="h-10 rounded-xl border text-sm font-medium transition-colors ${monthBtnClass(isActive)}">
-          ${idx + 1}月
+          ${idx + 1}鏈?
         </button>`;
     }).join("");
 
@@ -241,12 +240,12 @@ function openMonthPickerPanel() {
         <div class="flex items-center justify-between">
           <button data-year-nav="-1"
             class="h-8 w-8 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800">
-            ‹
+            鈥?
           </button>
-          <span class="text-sm font-medium text-gray-900 dark:text-gray-100">${pickerYear}年</span>
+          <span class="text-sm font-medium text-gray-900 dark:text-gray-100">${pickerYear}骞?/span>
           <button data-year-nav="1"
             class="h-8 w-8 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800">
-            ›
+            鈥?
           </button>
         </div>
       </div>
@@ -256,7 +255,7 @@ function openMonthPickerPanel() {
       <div class="px-4 pb-4">
         <button data-close
           class="w-full h-10 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800">
-          取消
+          鍙栨秷
         </button>
       </div>`;
 
@@ -292,24 +291,24 @@ function openMonthPickerPanel() {
 async function resolveImageUrl(path) {
   try {
     if (Array.isArray(path)) path = path[0];
-    console.log("图片路径:", path);
+    console.log("鍥剧墖璺緞:", path);
     if (!path || typeof path !== "string") return null;
     if (path.startsWith("http://") || path.startsWith("https://")) {
-      console.log("解析后URL:", path);
+      console.log("瑙ｆ瀽鍚嶶RL:", path);
       return path;
     }
 
     const { app } = getFirebaseApp();
     if (!app) {
-      console.error("getDownloadURL失败: Firebase app 未初始化", path);
+      console.error("getDownloadURL澶辫触: Firebase app 鏈垵濮嬪寲", path);
       return null;
     }
     const storage = getStorage(app);
     const url = await getDownloadURL(ref(storage, path));
-    console.log("解析后URL:", url);
+    console.log("瑙ｆ瀽鍚嶶RL:", url);
     return url;
   } catch (err) {
-    console.error("getDownloadURL失败:", path, err);
+    console.error("getDownloadURL澶辫触:", path, err);
     return null;
   }
 }
@@ -409,9 +408,9 @@ async function hydrateVoucherImages(containerEl) {
   await Promise.all(imgEls.map(async (img) => {
     const candidate = img.dataset.imagePath || "";
     const finalUrl = await resolveImageUrl(candidate);
-    img.onload = () => console.log("图片加载成功");
+    img.onload = () => console.log("鍥剧墖鍔犺浇鎴愬姛");
     img.onerror = () => {
-      console.error("图片加载失败:", img.src);
+      console.error("鍥剧墖鍔犺浇澶辫触:", img.src);
       img.onerror = null;
       img.src = FALLBACK_IMAGE_URL;
     };
@@ -427,7 +426,7 @@ function handleTxClick(tx) {
 }
 
 function showTxDetail(tx) {
-  // 构建详情底部抽屉
+  // 鏋勫缓璇︽儏搴曢儴鎶藉眽
   const voucherDisplayPaths = Array.isArray(tx.voucherStoragePaths) && tx.voucherStoragePaths.length > 0
     ? tx.voucherStoragePaths
     : (Array.isArray(tx.voucherPaths) ? tx.voucherPaths : []);
@@ -442,27 +441,27 @@ function showTxDetail(tx) {
       <div class="w-8 h-1 bg-gray-200 dark:bg-gray-700 rounded-full mx-auto mt-3 mb-4"></div>
       <div class="px-5 space-y-3">
         <div class="flex items-center justify-between">
-          <span class="text-lg font-medium ${tx.type === "收入" ? "text-teal-600" : "text-orange-600"}">
-            ${tx.type === "收入" ? "+" : "-"}¥${fmtAmt(tx.amount)}
+          <span class="text-lg font-medium ${tx.type === "鏀跺叆" ? "text-teal-600" : "text-orange-600"}">
+            ${tx.type === "鏀跺叆" ? "+" : "-"}楼${fmtAmt(tx.amount)}
           </span>
-          <span class="text-xs px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500">${tx.status || "未关联"}</span>
+          <span class="text-xs px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500">${tx.status || "鏈叧鑱?"}</span>
         </div>
-        <p class="text-base text-gray-900 dark:text-gray-100">${esc(tx.summary || "无摘要")}</p>
+        <p class="text-base text-gray-900 dark:text-gray-100">${esc(tx.summary || "鏃犳憳瑕?")}</p>
         <div class="grid grid-cols-2 gap-3 text-xs">
-          <div><span class="text-gray-400">分类</span><p class="text-gray-700 dark:text-gray-300 mt-0.5">${esc(tx.category || "未分类")}</p></div>
-          <div><span class="text-gray-400">日期</span><p class="text-gray-700 dark:text-gray-300 mt-0.5">${dateStr}</p></div>
-          <div><span class="text-gray-400">来源</span><p class="text-gray-700 dark:text-gray-300 mt-0.5">${esc(tx.source || "--")}</p></div>
-          <div><span class="text-gray-400">凭证数</span><p class="text-gray-700 dark:text-gray-300 mt-0.5">${voucherDisplayPaths.length || 0} 张</p></div>
+          <div><span class="text-gray-400">鍒嗙被</span><p class="text-gray-700 dark:text-gray-300 mt-0.5">${esc(tx.category || "鏈垎绫?")}</p></div>
+          <div><span class="text-gray-400">鏃ユ湡</span><p class="text-gray-700 dark:text-gray-300 mt-0.5">${dateStr}</p></div>
+          <div><span class="text-gray-400">鏉ユ簮</span><p class="text-gray-700 dark:text-gray-300 mt-0.5">${esc(tx.source || "--")}</p></div>
+          <div><span class="text-gray-400">鍑瘉鏁?</span><p class="text-gray-700 dark:text-gray-300 mt-0.5">${voucherDisplayPaths.length || 0} 寮?</p></div>
         </div>
         ${hasVoucher ? renderVoucherGallery(voucherDisplayPaths, tx.legacyVoucherIds) : ""}
         <div class="flex gap-2 pt-2">
           <button data-action="unbind"
             class="flex-1 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400">
-            解绑凭证
+            瑙ｇ粦鍑瘉
           </button>
           <button data-action="delete"
             class="flex-1 py-2 text-xs rounded-xl border border-red-200 dark:border-red-900 text-red-500">
-            删除账目
+            鍒犻櫎璐︾洰
           </button>
         </div>
       </div>
@@ -475,14 +474,14 @@ function showTxDetail(tx) {
   });
 
   overlay.querySelector("[data-action=delete]").addEventListener("click", async () => {
-    if (!confirm(`确认删除"${tx.summary}"？`)) return;
+    if (!confirm(`纭鍒犻櫎"${tx.summary}"锛焋`)) return;
     try {
       await deleteTransaction(tx.id);
-      showToast("已删除", "success");
+      showToast("宸插垹闄?", "success");
       overlay.remove();
       await loadAndRender();
     } catch (err) {
-      showToast(`删除失败：${err.message}`, "error");
+      showToast(`鍒犻櫎澶辫触锛?{err.message}`, "error");
     }
   });
 }
@@ -491,7 +490,7 @@ function renderVoucherGallery(storagePaths, legacyDriveIds = []) {
   const isDualBlind = APP_CONFIG.DUAL_BLIND_BANNER;
   return `
     <div>
-      <p class="text-xs text-gray-400 mb-2">凭证图片 ${isDualBlind ? "· 双盲核对模式" : ""}</p>
+      <p class="text-xs text-gray-400 mb-2">鍑瘉鍥剧墖 ${isDualBlind ? "路 鍙岀洸鏍稿妯″紡" : ""}</p>
       <div class="flex gap-2 overflow-x-auto pb-1">
         ${storagePaths.map((item, i) => {
           const imagePath = extractImagePath(item);
@@ -499,52 +498,59 @@ function renderVoucherGallery(storagePaths, legacyDriveIds = []) {
           return `
             <div class="flex-shrink-0 space-y-1">
               <img src="${FALLBACK_IMAGE_URL}" data-image-path="${esc(imagePath || "")}" class="w-20 h-20 rounded-lg object-cover border border-gray-100 dark:border-gray-700"
-                   onerror="this.src='data:image/svg+xml,<svg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 80 80\\'><rect fill=\\'%23f3f4f6\\' width=\\'80\\' height=\\'80\\'/><text y=\\'45\\' x=\\'50%\\' text-anchor=\\'middle\\' font-size=\\'12\\' fill=\\'%239ca3af\\'>加载失败</text></svg>'">
+                   onerror="this.src='data:image/svg+xml,<svg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 80 80\\'><rect fill=\\'%23f3f4f6\\' width=\\'80\\' height=\\'80\\'/><text y=\\'45\\' x=\\'50%\\' text-anchor=\\'middle\\' font-size=\\'12\\' fill=\\'%239ca3af\\'>鍔犺浇澶辫触</text></svg>'">
               ${isDualBlind && driveId ? `
                 <img src="https://drive.google.com/thumbnail?id=${esc(driveId)}&sz=w80"
                      class="w-20 h-5 rounded object-cover border border-blue-200 opacity-60"
-                     title="V1 原图对比">` : ""}
+                     title="V1 鍘熷浘瀵规瘮">` : ""}
             </div>`;
         }).join("")}
       </div>
     </div>`;
 }
 
-// ── 1-9 键功能调度 ────────────────────────────────────
+// 鈹€鈹€ 1-9 閿姛鑳借皟搴?鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 async function handleKeyAction(action) {
   switch (action) {
-    case "openBatchMatching":    return openBatchMatching();
-    case "openRowCorrelation":   return showToast("按行检查：筛选未关联记录...", "info");
-    case "openVoucherCorrelation": return showToast("按凭证检查：扫描孤立凭证...", "info");
-    case "openQuickEntry":       return openQuickEntry();
-    case "openBatchText":        return openBatchText();
-    case "openShadowMonitor":    return openShadowMonitor();   // ⑥ 双写监控
-    case "openDeduplication":    return showToast("去重扫描功能开发中...", "info");
-    case "openUnbind":           return showToast("请先点击要解绑的账目卡片", "info");
-    case "openConflictCourt":    return showToast("断案法庭功能开发中...", "info");
-    default:                     return showToast(`未知功能：${action}`, "warning");
+    case "openQuickEntry":        return openQuickEntry();
+    case "openTempEntry":         return openBatchText();
+    case "openUnbind":            return showToast("\u8bf7\u5148\u70b9\u51fb\u8981\u89e3\u7ed1\u7684\u8d26\u76ee\u5361\u7247", "info");
+    case "openPendingPool":       return showToast("\u5f85\u5339\u914d\u6c60\u5165\u53e3\u9884\u7559", "info");
+    case "openGlobalInspection":  return showToast("\u5168\u5c40\u6392\u67e5\u4e2d\u5fc3\u5f53\u524d\u5148\u590d\u7528\u6392\u67e5\u4e3b\u6d41\u7a0b", "info");
+    case "openDifficultyCenter":  return showToast("\u96be\u5ea6\u5904\u7406\u4e2d\u5fc3\u5165\u53e3\u9884\u7559", "info");
+    case "openSettingsCenter":    activateBottomNav("settings"); return showToast("\u8bbe\u7f6e\u5165\u53e3\u9884\u7559", "info");
+    case "openReportCenter":      return switchTab("stats");
+    case "openToolbox":           return openShadowMonitor();
+
+    case "openBatchMatching":     return openBatchMatching();
+    case "openRowCorrelation":    return showToast("鎸夎妫€鏌ワ細绛涢€夋湭鍏宠仈璁板綍...", "info");
+    case "openVoucherCorrelation":return showToast("鎸夊嚟璇佹鏌ワ細鎵弿瀛ょ珛鍑瘉...", "info");
+    case "openBatchText":         return openBatchText();
+    case "openShadowMonitor":     return openShadowMonitor();
+    case "openDeduplication":     return showToast("鍘婚噸鎵弿鍔熻兘寮€鍙戜腑...", "info");
+    case "openConflictCourt":     return showToast("鏂娉曞涵鍔熻兘寮€鍙戜腑...", "info");
+    default:                       return showToast(`鏈煡鍔熻兘锛?{action}`, "warning");
   }
 }
 
-// ── 功能 ①：批量对账台 ───────────────────────────────
 
 async function openBatchMatching() {
   const overlay = createModalOverlay();
   overlay.innerHTML = `
     <div class="bg-white dark:bg-gray-900 rounded-2xl mx-4 w-full max-w-sm p-5">
-      <h2 class="text-base font-medium text-gray-900 dark:text-gray-100 mb-4">批量对账台</h2>
+      <h2 class="text-base font-medium text-gray-900 dark:text-gray-100 mb-4">鎵归噺瀵硅处鍙?/h2>
       <div id="batch-drop" class="border-2 border-dashed border-gray-200 dark:border-gray-700
                                    rounded-xl p-8 text-center cursor-pointer hover:border-purple-400 transition-colors">
         <svg class="w-8 h-8 text-gray-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
         </svg>
-        <p class="text-sm text-gray-400">点击或拖入凭证图片</p>
-        <p class="text-xs text-gray-300 mt-1">支持多选，AI 自动批量匹配</p>
+        <p class="text-sm text-gray-400">鐐瑰嚮鎴栨嫋鍏ュ嚟璇佸浘鐗?/p>
+        <p class="text-xs text-gray-300 mt-1">鏀寔澶氶€夛紝AI 鑷姩鎵归噺鍖归厤</p>
         <input type="file" id="batch-file-input" accept="image/*" multiple class="hidden">
       </div>
       <div id="batch-results" class="mt-4 space-y-2 max-h-48 overflow-y-auto"></div>
-      <button id="batch-close" class="mt-4 w-full py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 text-gray-500">关闭</button>
+      <button id="batch-close" class="mt-4 w-full py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 text-gray-500">鍏抽棴</button>
     </div>`;
 
   document.getElementById("app-root").appendChild(overlay);
@@ -566,7 +572,7 @@ async function openBatchMatching() {
 
   async function processBatchFiles(files) {
     const resultsEl = overlay.querySelector("#batch-results");
-    resultsEl.innerHTML = `<p class="text-xs text-gray-400 text-center py-2">AI 识别中... (0/${files.length})</p>`;
+    resultsEl.innerHTML = `<p class="text-xs text-gray-400 text-center py-2">AI 璇嗗埆涓?.. (0/${files.length})</p>`;
 
     let done = 0;
     for (const file of files) {
@@ -579,113 +585,77 @@ async function openBatchMatching() {
         resultsEl.innerHTML += `
           <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-3 text-xs">
             <p class="font-medium text-gray-800 dark:text-gray-200 truncate">${esc(file.name)}</p>
-            <p class="text-gray-500 mt-1">AI: ¥${aiData.amount ?? "?"} · ${esc(aiData.merchant || aiData.summary || "")}</p>
+            <p class="text-gray-500 mt-1">AI: 楼${aiData.amount ?? "?"} 路 ${esc(aiData.merchant || aiData.summary || "")}</p>
             ${match
-              ? `<p class="text-teal-600 mt-1">匹配: ${esc(match.tx.summary)} (${match.score}分)</p>`
-              : `<p class="text-orange-500 mt-1">未找到匹配账目</p>`}
+              ? `<p class="text-teal-600 mt-1">鍖归厤: ${esc(match.tx.summary)} (${match.score}鍒?</p>`
+              : `<p class="text-orange-500 mt-1">鏈壘鍒板尮閰嶈处鐩?/p>`}
           </div>`;
 
-        resultsEl.querySelector("p")?.remove(); // 移除进度提示
-        showToast(`已处理 ${done}/${files.length}`, "info", 1500);
+        resultsEl.querySelector("p")?.remove(); // 绉婚櫎杩涘害鎻愮ず
+        showToast(`宸插鐞?${done}/${files.length}`, "info", 1500);
       } catch (err) {
-        resultsEl.innerHTML += `<p class="text-xs text-red-500">${esc(file.name)}：${err.message}</p>`;
+        resultsEl.innerHTML += `<p class="text-xs text-red-500">${esc(file.name)}锛?{err.message}</p>`;
       }
     }
   }
 }
 
-// ── 功能 ④：快捷记账 ─────────────────────────────────
+// 鈹€鈹€ 鍔熻兘 鈶ｏ細蹇嵎璁拌处 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 function openQuickEntry() {
   const overlay = createModalOverlay();
   overlay.innerHTML = `
     <div class="bg-white dark:bg-gray-900 rounded-2xl mx-4 w-full max-w-sm p-5">
-      <h2 class="text-base font-medium text-gray-900 dark:text-gray-100 mb-3">快捷记账</h2>
-      <textarea id="quick-text" rows="3"
-        class="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800
-               text-sm text-gray-900 dark:text-gray-100 resize-none focus:outline-none focus:ring-2 focus:ring-purple-400"
-        placeholder="输入一句话，例如：今天打车30，午饭15，晚上卖二手书50元"></textarea>
-      <div class="flex gap-2 mt-3">
-        <button id="quick-voice" class="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-xs text-gray-500">
-          🎙️ 语音
+      <h2 class="text-base font-medium text-gray-900 dark:text-gray-100 mb-4">\u5feb\u6377\u8bb0\u8d26\uff08\u9759\u6001\u9aa8\u67b6\uff09</h2>
+
+      <section class="rounded-xl border border-gray-200 dark:border-gray-700 p-3 mb-3">
+        <p class="text-sm font-medium text-gray-800 dark:text-gray-200">\u8bed\u97f3\u8f93\u5165</p>
+        <p class="text-xs text-gray-500 mt-1">\u70b9\u51fb\u5f00\u59cb\u5f55\u97f3 \u2192 \u540e\u7eed\u7248\u672c\u63a5\u5165</p>
+      </section>
+
+      <section class="rounded-xl border border-gray-200 dark:border-gray-700 p-3 mb-3">
+        <p class="text-sm font-medium text-gray-800 dark:text-gray-200">\u56fe\u7247\u4e0a\u4f20</p>
+        <input id="quick-image-input" type="file" accept="image/*"
+          class="mt-2 block w-full text-xs text-gray-600 dark:text-gray-300 file:mr-2 file:px-2 file:py-1 file:rounded-lg file:border-0 file:bg-gray-100 dark:file:bg-gray-700 file:text-gray-700 dark:file:text-gray-200">
+        <p id="quick-image-name" class="text-xs text-gray-500 mt-2">\u5c1a\u672a\u9009\u62e9\u6587\u4ef6</p>
+        <p class="text-xs text-gray-500 mt-1">OCR \u540e\u7eed\u7248\u672c\u63a5\u5165</p>
+      </section>
+
+      <section class="rounded-xl border border-gray-200 dark:border-gray-700 p-3 mb-4">
+        <p class="text-sm font-medium text-gray-800 dark:text-gray-200">\u6587\u5b57\u8f93\u5165</p>
+        <textarea id="quick-text" rows="3"
+          class="mt-2 w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800
+                 text-sm text-gray-900 dark:text-gray-100 resize-none focus:outline-none focus:ring-2 focus:ring-purple-400"
+          placeholder="\u8f93\u5165\u4e00\u53e5\u8bdd\uff0c\u4f8b\u5982\uff1a\u4eca\u5929\u6253\u8f6630\uff0c\u5348\u996d15"></textarea>
+      </section>
+
+      <div class="flex gap-2">
+        <button id="quick-close" class="px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-xs text-gray-600 dark:text-gray-300">
+          \u5173\u95ed
         </button>
-        <button id="quick-submit" class="flex-1 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium transition-colors">
-          AI 解析并录入
+        <button id="quick-coming-soon" class="flex-1 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium transition-colors">
+          \u540e\u7eed\u7248\u672c\u5f00\u653e
         </button>
       </div>
-      <div id="quick-preview" class="mt-3 space-y-2"></div>
     </div>`;
 
   document.getElementById("app-root").appendChild(overlay);
   overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
 
-  // 语音输入
-  overlay.querySelector("#quick-voice").addEventListener("click", () => {
-    if (!("webkitSpeechRecognition" in window || "SpeechRecognition" in window)) {
-      showToast("当前浏览器不支持语音录入", "warning");
-      return;
-    }
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const rec = new SR();
-    rec.lang = "zh-CN";
-    rec.onresult = (e) => {
-      overlay.querySelector("#quick-text").value = e.results[0][0].transcript;
-    };
-    rec.start();
-    showToast("请说话...", "info", 3000);
+  const imageInput = overlay.querySelector("#quick-image-input");
+  const imageName  = overlay.querySelector("#quick-image-name");
+  imageInput?.addEventListener("change", () => {
+    const file = imageInput.files && imageInput.files[0];
+    imageName.textContent = file ? file.name : "\u5c1a\u672a\u9009\u62e9\u6587\u4ef6";
   });
 
-  overlay.querySelector("#quick-submit").addEventListener("click", async () => {
-    const text = overlay.querySelector("#quick-text").value.trim();
-    if (!text) return;
-    const btn = overlay.querySelector("#quick-submit");
-    btn.disabled = true;
-    btn.textContent = "解析中...";
-
-    try {
-      const items = await geminiNLP({ text });
-      const preview = overlay.querySelector("#quick-preview");
-      preview.innerHTML = items.map((item, i) => `
-        <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-3 text-xs flex items-center justify-between">
-          <div>
-            <span class="font-medium text-gray-800 dark:text-gray-200">${esc(item.summary)}</span>
-            <span class="text-gray-400 ml-2">${esc(item.category)} · ${item.date}</span>
-          </div>
-          <span class="${item.type === "收入" ? "text-teal-600" : "text-orange-600"} font-medium">
-            ${item.type === "收入" ? "+" : "-"}¥${item.amount}
-          </span>
-        </div>`).join("") +
-        `<button id="quick-confirm"
-           class="w-full py-2 mt-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium transition-colors">
-           确认写入 ${items.length} 笔
-         </button>`;
-
-      preview.querySelector("#quick-confirm").addEventListener("click", async () => {
-        for (const item of items) {
-          await submitTransaction({
-            date:     item.date,
-            month:    (item.date || "").slice(0, 7),
-            type:     item.type,
-            category: item.category,
-            amount:   item.amount,
-            summary:  item.summary,
-            source:   "快捷文本录入",
-          });
-        }
-        showToast(`成功录入 ${items.length} 笔`, "success");
-        overlay.remove();
-        await loadAndRender();
-      });
-    } catch (err) {
-      showToast(`解析失败：${err.message}`, "error");
-    } finally {
-      btn.disabled    = false;
-      btn.textContent = "AI 解析并录入";
-    }
+  overlay.querySelector("#quick-close")?.addEventListener("click", () => overlay.remove());
+  overlay.querySelector("#quick-coming-soon")?.addEventListener("click", () => {
+    showToast("\u540e\u7eed\u7248\u672c\u5f00\u653e", "info", 2000);
   });
 }
 
-// ── 功能 ⑤：批量补录 ─────────────────────────────────
+// 鈹€鈹€ 鍔熻兘 鈶わ細鎵归噺琛ュ綍 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 function openBatchText() {
   const overlay = createModalOverlay();
@@ -711,26 +681,26 @@ function openBatchText() {
     if (!text) return;
     const btn = overlay.querySelector("#batch-text-submit");
     btn.disabled = true;
-    btn.textContent = "解析中...";
+    btn.textContent = "瑙ｆ瀽涓?..";
 
     try {
       const items   = await geminiNLP({ text });
       const preview = overlay.querySelector("#batch-text-preview");
 
-      preview.innerHTML = `<p class="text-xs text-gray-400">识别到 ${items.length} 笔记录</p>` +
+      preview.innerHTML = `<p class="text-xs text-gray-400">璇嗗埆鍒?${items.length} 绗旇褰?/p>` +
         items.map((item) => `
           <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-3 text-xs">
             <div class="flex justify-between">
               <span class="font-medium text-gray-800 dark:text-gray-200">${esc(item.summary)}</span>
-              <span class="${item.type === "收入" ? "text-teal-600" : "text-orange-600"}">
-                ${item.type === "收入" ? "+" : "-"}¥${item.amount}
+              <span class="${item.type === "鏀跺叆" ? "text-teal-600" : "text-orange-600"}">
+                ${item.type === "鏀跺叆" ? "+" : "-"}楼${item.amount}
               </span>
             </div>
-            <p class="text-gray-400 mt-0.5">${item.date} · ${esc(item.category)}</p>
+            <p class="text-gray-400 mt-0.5">${item.date} 路 ${esc(item.category)}</p>
           </div>`).join("") +
         `<button id="batch-text-confirm"
            class="w-full py-2 mt-1 rounded-xl bg-teal-600 text-white text-xs font-medium">
-           全部写入 (${items.length} 笔)
+           鍏ㄩ儴鍐欏叆 (${items.length} 绗?
          </button>`;
 
       preview.querySelector("#batch-text-confirm").addEventListener("click", async () => {
@@ -742,23 +712,23 @@ function openBatchText() {
             category: item.category,
             amount:   item.amount,
             summary:  item.summary,
-            source:   "批量文本录入",
+            source:   "鎵归噺鏂囨湰褰曞叆",
           });
         }
-        showToast(`成功录入 ${items.length} 笔`, "success");
+        showToast(`鎴愬姛褰曞叆 ${items.length} 绗擿`, "success");
         overlay.remove();
         await loadAndRender();
       });
     } catch (err) {
-      showToast(`解析失败：${err.message}`, "error");
+      showToast(`瑙ｆ瀽澶辫触锛?{err.message}`, "error");
     } finally {
       btn.disabled    = false;
-      btn.textContent = "AI 批量解析";
+      btn.textContent = "AI 鎵归噺瑙ｆ瀽";
     }
   });
 }
 
-// ── 功能 ⑥：Shadow Sync Monitor（铁律二核心）────────
+// 鈹€鈹€ 鍔熻兘 鈶ワ細Shadow Sync Monitor锛堥搧寰嬩簩鏍稿績锛夆攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 async function openShadowMonitor() {
   showShadowMonitor();
@@ -768,11 +738,11 @@ async function openShadowMonitor() {
     renderShadowMonitor(logs);
   } catch (err) {
     const el = document.getElementById("shadow-monitor-log");
-    if (el) el.innerHTML = `<p class="text-red-500">加载日志失败：${esc(err.message)}</p>`;
+    if (el) el.innerHTML = `<p class="text-red-500">鍔犺浇鏃ュ織澶辫触锛?{esc(err.message)}</p>`;
   }
 }
 
-// ── 内部工具 ──────────────────────────────────────────
+// 鈹€鈹€ 鍐呴儴宸ュ叿 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 function createModalOverlay() {
   const el = document.createElement("div");
