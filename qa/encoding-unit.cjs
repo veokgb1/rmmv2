@@ -48,7 +48,7 @@ assert(
     snap("a", {
       updatedAt: null,
       lastReviewedAt: "2026-03-01T00:00:00.000Z",
-      createdAt: "2026-03-01T00:00:00.000Z",
+      : "2026-03-01T00:00:00.000Z",
     })
   ) === null
 );

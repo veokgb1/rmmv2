@@ -493,85 +493,96 @@ export function openDrawer(onKeyAction, options = {}) {
 
   const disabledActions = new Set(options.disabledActions || []);
   const hiddenActions = new Set(options.hiddenActions || []);
-  const visibleKeys   = KEY_MAP.filter((key) => !hiddenActions.has(key.action));
-  const keyByAction   = new Map(visibleKeys.map((key) => [key.action, key]));
+  const drawerItems = [
+    {
+      id: 1,
+      label: "\u5feb\u6377\u8bb0\u8d26",
+      desc: "\u8bed\u97f3 / \u56fe\u7247 / \u6587\u5b57\u751f\u6210\u5019\u9009\u8bb0\u5f55",
+      action: "openQuickEntry",
+      icon: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z",
+    },
+    {
+      id: 2,
+      label: "\u4e34\u65f6\u5f55\u5165",
+      desc: "\u5148\u8bb0\u5f55\uff0c\u540e\u6574\u7406\uff0c\u53ef\u5e26\u7167\u7247\u7ed1\u5b9a",
+      action: "openTempEntry",
+      icon: "M4 6h16M4 10h16M4 14h16M4 18h10",
+    },
+    {
+      id: 3,
+      label: "\u7cbe\u51c6\u7ed1\u5b9a\u89e3\u7ed1",
+      desc: "\u6309\u5bf9\u8c61\u7cbe\u786e\u5904\u7406\u7167\u7247\u4e0e\u8bb0\u5f55\u5173\u7cfb",
+      action: "openUnbind",
+      icon: "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21",
+    },
+    {
+      id: 4,
+      label: "\u5f85\u5339\u914d\u6c60",
+      desc: "\u7edf\u4e00\u67e5\u770b\u672a\u7ed1\u5b9a\u7167\u7247",
+      action: "openPendingPool",
+      icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2",
+    },
+    {
+      id: 5,
+      label: "\u5168\u5c40\u6392\u67e5\u4e2d\u5fc3",
+      desc: "\u67e5\u91cd\u590d\u3001\u67e5\u51b2\u7a81\u3001\u67e5\u7167\u7247\u5173\u7cfb",
+      action: "openGlobalInspection",
+      icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
+    },
+    {
+      id: 6,
+      label: "\u96be\u5ea6\u5904\u7406\u4e2d\u5fc3",
+      desc: "\u5904\u7406\u591a\u5bf9\u591a\u4e0e\u590d\u6742\u5339\u914d",
+      action: "openDifficultyCenter",
+      icon: "M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3",
+    },
+    {
+      id: 7,
+      label: "\u8bbe\u7f6e",
+      desc: "\u7cfb\u7edf\u7b56\u7565\u4e0e\u5c55\u793a\u914d\u7f6e",
+      action: "openSettingsCenter",
+      icon: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z",
+    },
+    {
+      id: 8,
+      label: "\u62a5\u8868",
+      desc: "\u67e5\u770b\u8f93\u51fa\u3001\u5dee\u5f02\u4e0e\u7edf\u8ba1\u7ed3\u679c",
+      action: "openReportCenter",
+      icon: "M9 17V7m6 10V4m6 13v-6M3 17v-3",
+    },
+    {
+      id: 9,
+      label: "\u5de5\u5177",
+      desc: "\u8c03\u8bd5\u3001\u68c0\u67e5\u4e0e\u540e\u7eed\u6269\u5c55",
+      action: "openToolbox",
+      icon: "M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",
+    },
+  ].filter((item) => !hiddenActions.has(item.action));
 
-  const primary = [keyByAction.get("openQuickEntry")].filter(Boolean);
-  const secondary = ["openBatchText", "openBatchMatching", "openShadowMonitor"]
-    .map((action) => keyByAction.get(action))
-    .filter(Boolean);
-  const secondarySet = new Set(secondary.map((k) => k.action));
-  const primarySet = new Set(primary.map((k) => k.action));
-  const developing = visibleKeys.filter((key) => !primarySet.has(key.action) && !secondarySet.has(key.action));
-
-  function renderKey(key, tier, forceDisabled = false) {
-    const isDisabled = forceDisabled || disabledActions.has(key.action);
-    const footerText = isDisabled ? "开发中" : `⌘${key.id}`;
+  function renderKey(item) {
+    const isDisabled = disabledActions.has(item.action);
     const disabledAttr = isDisabled ? 'aria-disabled="true"' : "";
 
-    if (tier === "primary") {
-      return `
-      <button class="drawer-key col-span-3 flex items-center gap-3 rounded-xl px-3 py-3
-                     bg-purple-600 hover:bg-purple-700 text-white shadow-sm transition-colors
-                     ${isDisabled ? "opacity-45 cursor-not-allowed" : ""}"
-              data-action="${key.action}"
-              data-label="${key.label}"
-              data-tier="primary"
+    return `
+      <button class="drawer-key flex h-[124px] flex-col items-start gap-1.5 rounded-xl border border-gray-200 dark:border-gray-700
+                     bg-white dark:bg-gray-800 px-3 py-3 text-left transition-colors
+                     ${isDisabled ? "opacity-45 cursor-not-allowed" : "active:bg-gray-50 dark:active:bg-gray-700"}"
+              data-action="${item.action}"
+              data-label="${item.label}"
               data-disabled="${isDisabled ? "true" : "false"}"
               ${disabledAttr}>
-        <span class="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center flex-shrink-0">
-          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="${key.icon}"/>
+        <span class="w-7 h-7 rounded-lg bg-purple-50 dark:bg-purple-950 flex items-center justify-center">
+          <svg class="w-4 h-4 text-purple-600 dark:text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="${item.icon}"/>
           </svg>
         </span>
-        <span class="flex-1 min-w-0 text-left">
-          <span class="block text-sm font-semibold truncate">${key.label}</span>
-          <span class="block text-[10px] text-white/80 truncate">${key.desc || "主入口"}</span>
-        </span>
-        <span class="text-[10px] text-white/80">${footerText}</span>
-      </button>`;
-    }
-
-    const secondaryClass = tier === "secondary"
-      ? "bg-gray-50 dark:bg-gray-800 border-gray-100 dark:border-gray-700"
-      : "bg-gray-100/90 dark:bg-gray-800/80 border-gray-200 dark:border-gray-700 border-dashed";
-    const disabledClass = isDisabled
-      ? "opacity-45 cursor-not-allowed"
-      : "active:bg-gray-100 dark:active:bg-gray-700";
-    const footerClass = isDisabled ? "text-[9px] text-amber-500" : "text-[9px] text-gray-400";
-
-    return `
-      <button class="drawer-key flex flex-col items-center gap-1.5 border rounded-xl py-3 px-2
-                     transition-colors ${secondaryClass} ${disabledClass}"
-              data-action="${key.action}"
-              data-label="${key.label}"
-              data-tier="${tier}"
-              data-disabled="${isDisabled ? "true" : "false"}"
-              ${disabledAttr}>
-        <svg class="w-5 h-5 text-purple-500 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="${key.icon}"/>
-        </svg>
-        <span class="text-[10px] font-medium text-gray-700 dark:text-gray-300 text-center leading-tight">${key.label}</span>
-        <span class="${footerClass}">${footerText}</span>
+        <span class="text-[12px] font-medium text-gray-800 dark:text-gray-200 leading-tight">${item.label}</span>
+        <span class="min-h-[2.5em] text-[10px] text-gray-500 dark:text-gray-400 leading-tight">${item.desc}</span>
       </button>`;
   }
 
-  const sections = [];
-  if (primary.length) {
-    sections.push(`<p class="col-span-3 text-[10px] text-gray-400 px-1">主入口</p>`);
-    sections.push(renderKey(primary[0], "primary"));
-  }
-  if (secondary.length) {
-    sections.push(`<p class="col-span-3 text-[10px] text-gray-400 px-1 mt-1">辅助工具</p>`);
-    sections.push(...secondary.map((key) => renderKey(key, "secondary")));
-  }
-  if (developing.length) {
-    sections.push(`<p class="col-span-3 text-[10px] text-amber-500 px-1 mt-1">开发中（暂不可用）</p>`);
-    sections.push(...developing.map((key) => renderKey(key, "developing", true)));
-  }
-  grid.innerHTML = sections.join("");
+  grid.innerHTML = drawerItems.map((item) => renderKey(item)).join("");
 
-  // 绑定点击
   grid.querySelectorAll(".drawer-key").forEach((btn) => {
     if (btn.dataset.disabled === "true") return;
     btn.addEventListener("click", () => {

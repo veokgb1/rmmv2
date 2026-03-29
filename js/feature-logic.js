@@ -1,7 +1,7 @@
 ﻿// v2-app/js/feature-logic.js
-// 鑱岃矗锛氭牳蹇冧笟鍔￠€昏緫銆?-9 閿搷搴斻€丄I 璋冨害銆佸簲鐢ㄧ姸鎬佹祦杞?
-// 渚濊禆锛歫s/core-config.js, js/api-bridge.js, js/ui-layout.js, js/match-engine.js
-// 瀵煎嚭锛歩nitApp
+// 职责：核心业务逻辑、1-9 键响应、AI 调度、应用状态流转
+// 依赖：js/core-config.js, js/api-bridge.js, js/ui-layout.js, js/match-engine.js
+// 导出：initApp
 
 import { APP_CONFIG, KEY_MAP, getFirebaseApp } from "./core-config.js";
 import {
@@ -23,7 +23,7 @@ import {
 }                                         from "./ui-layout.js";
 import { findBestMatch, calculateMatchScore } from "./match-engine.js";
 
-// 鈹€鈹€ 搴旂敤鐘舵€?鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ===== 应用状态 =====
 const state = {
   user:         null,
   transactions: [],
@@ -35,13 +35,13 @@ const state = {
 
 const FALLBACK_IMAGE_URL = "/fallback.png";
 
-// 鈹€鈹€ 鍏ュ彛锛氬垵濮嬪寲鏁翠釜搴旂敤 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ===== 入口：初始化整个应用 =====
 
 /**
- * 搴旂敤鍒濆鍖栵紙index.html 涓?type="module" 璋冪敤锛?
+ * 应用初始化（index.html 中 type="module" 调用）
  */
 export async function initApp() {
-  // 鐩戝惉 Firebase Auth 鐘舵€?
+  // 监听 Firebase Auth 状态
   const unsubscribe = await onAuthChange(async (user) => {
     if (user) {
       state.user = user;
@@ -52,29 +52,29 @@ export async function initApp() {
       state.user = null;
       showLoginScreen(async (email, password) => {
         await loginUser({ email, password });
-        // onAuthChange 浼氳嚜鍔ㄨЕ鍙戜笂闈㈢殑 user 鍒嗘敮
+        // onAuthChange 会自动触发上面的 user 分支
       });
     }
   });
 
-  // 绂诲紑椤甸潰鏃跺彇娑堢洃鍚?
+  // 离开页面时取消监听
   window.addEventListener("beforeunload", unsubscribe);
 }
 
-// 鈹€鈹€ App Shell 浜嬩欢缁戝畾锛堢櫥褰曞悗鎵ц涓€娆★級鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ===== App Shell 事件绑定（登录后执行一次） =====
 
 function bindShellEvents() {
-  // Tab 鍒囨崲
+  // Tab 切换
   document.querySelectorAll(".tab-btn").forEach((btn) => {
     btn.addEventListener("click", () => switchTab(btn.dataset.tab));
   });
 
-  // FAB 鍞よ捣鎶藉眽
+  // FAB 唤起抽屉
   document.getElementById("fab-add")?.addEventListener("click", () => {
     openDrawer(handleKeyAction);
   });
 
-  // 搴曢儴瀵艰埅锛堢洰鍓嶄粎 ledger 鏈夊唴瀹癸級
+  // 底部导航（目前仅 ledger 有内容）
   document.querySelectorAll(".nav-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const nav = btn.dataset.nav;
@@ -88,22 +88,22 @@ function bindShellEvents() {
     });
   });
 
-  // 鍙岀洸妯箙锛氭煡鐪嬪姣旀寜閽?
+  // 双屏横幅：查看对比按钮
   document.getElementById("banner-compare-btn")?.addEventListener("click", () => {
     showToast("鍙岀洸鏍稿锛氱偣鍑讳换鎰忚处鐩崱鐗囧彲瀵规瘮鏂版棫鍑瘉鍥剧墖", "info", 4000);
   });
 
-  // 鏈堜唤鍒囨崲
+  // 月份切换
   document.getElementById("month-picker")?.addEventListener("click", openMonthPickerPanel);
 
-  // 鏃ュ巻涓婁笅鏈堟寜閽紙鍔ㄦ€佹覆鏌撳悗缁戝畾锛?
+  // 日历上下月按钮（动态渲染后绑定）
   document.getElementById("pane-cal")?.addEventListener("click", (e) => {
     if (e.target.closest("#cal-prev")) navigateMonth(-1);
     if (e.target.closest("#cal-next")) navigateMonth(1);
   });
 }
 
-// 鈹€鈹€ Tab 鍒囨崲 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ===== Tab 切换 =====
 
 function switchTab(tabName) {
   state.activeTab = tabName;
@@ -148,7 +148,7 @@ function activateBottomNav(navName) {
   });
 }
 
-// 鈹€鈹€ 鏁版嵁鍔犺浇涓庢覆鏌?鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ===== 数据加载与渲染 =====
 
 async function loadAndRender() {
   if (state.isLoading) return;
@@ -176,7 +176,7 @@ function updateMonthLabel() {
   if (el) el.textContent = `${state.currentYear}\u5e74${state.currentMonth + 1}\u6708`;
 }
 
-// 鈹€鈹€ 鏈堜唤瀵艰埅 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ===== 月份导航 =====
 
 function navigateMonth(delta) {
   let m = state.currentMonth + delta;
@@ -191,7 +191,7 @@ function navigateMonth(delta) {
 function showMonthPicker() {
   openMonthPickerPanel();
   return;
-  // 绠€鍗?prompt锛堝悗缁彲鏇挎崲涓哄簳閮ㄦ粴杞€夋嫨鍣級
+  // 简单 prompt（后续可替换为底部滚轮选择器）
   const input = prompt(
     "杈撳叆瑕佹煡鐪嬬殑鏈堜唤锛堟牸寮?YYYY-MM锛岀暀绌?鏈湀锛夛細",
     `${state.currentYear}-${String(state.currentMonth + 1).padStart(2, "0")}`
@@ -204,7 +204,7 @@ function showMonthPicker() {
   loadAndRender();
 }
 
-// 鈹€鈹€ 璐︾洰鍗＄墖鐐瑰嚮 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ===== 月份选择面板 =====
 
 function openMonthPickerPanel() {
   const appRoot = document.getElementById("app-root");
@@ -426,7 +426,7 @@ function handleTxClick(tx) {
 }
 
 function showTxDetail(tx) {
-  // 鏋勫缓璇︽儏搴曢儴鎶藉眽
+  // 构建详情底部抽屉
   const voucherDisplayPaths = Array.isArray(tx.voucherStoragePaths) && tx.voucherStoragePaths.length > 0
     ? tx.voucherStoragePaths
     : (Array.isArray(tx.voucherPaths) ? tx.voucherPaths : []);
@@ -509,7 +509,7 @@ function renderVoucherGallery(storagePaths, legacyDriveIds = []) {
     </div>`;
 }
 
-// 鈹€鈹€ 1-9 閿姛鑳借皟搴?鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ===== 1-9 键功能调度 =====
 
 async function handleKeyAction(action) {
   switch (action) {
@@ -600,11 +600,12 @@ async function openBatchMatching() {
   }
 }
 
-// 鈹€鈹€ 鍔熻兘 鈶ｏ細蹇嵎璁拌处 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ===== 功能 ①：快捷记账 =====
 
 function openQuickEntry() {
   let currentCandidate = null;
   let candidateConfirmed = false;
+  let confirmBtn = null;
 
   const getToday = () => {
     const now = new Date();
@@ -629,6 +630,20 @@ function openQuickEntry() {
       date: getToday(),
       category,
     };
+  };
+
+  const syncConfirmState = () => {
+    if (!confirmBtn) return;
+    if (candidateConfirmed) {
+      confirmBtn.disabled = true;
+      confirmBtn.className = "w-full mb-4 py-2 rounded-xl bg-teal-600/50 text-white text-xs font-medium transition-colors opacity-70 cursor-not-allowed";
+      confirmBtn.textContent = "\u5df2\u786e\u8ba4";
+      return;
+    }
+
+    confirmBtn.disabled = false;
+    confirmBtn.className = "w-full mb-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium transition-colors";
+    confirmBtn.textContent = "\u786e\u8ba4\u8bb0\u5f55";
   };
 
   const overlay = createModalOverlay();
@@ -678,20 +693,27 @@ function openQuickEntry() {
     </div>`;
 
   document.getElementById("app-root").appendChild(overlay);
-  overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+  const closeQuickEntry = () => {
+    currentCandidate = null;
+    candidateConfirmed = false;
+    syncConfirmState();
+    overlay.remove();
+  };
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) closeQuickEntry(); });
 
   const imageInput = overlay.querySelector("#quick-image-input");
   const imageName  = overlay.querySelector("#quick-image-name");
   const textInput = overlay.querySelector("#quick-text");
   const candidateWrap = overlay.querySelector("#quick-candidate-wrap");
   const candidateEl = overlay.querySelector("#quick-candidate");
-  const confirmBtn = overlay.querySelector("#quick-confirm");
+  confirmBtn = overlay.querySelector("#quick-confirm");
+  syncConfirmState();
   imageInput?.addEventListener("change", () => {
     const file = imageInput.files && imageInput.files[0];
     imageName.textContent = file ? file.name : "\u5c1a\u672a\u9009\u62e9\u6587\u4ef6";
   });
 
-  overlay.querySelector("#quick-close")?.addEventListener("click", () => overlay.remove());
+  overlay.querySelector("#quick-close")?.addEventListener("click", closeQuickEntry);
   overlay.querySelector("#quick-coming-soon")?.addEventListener("click", () => {
     const text = textInput?.value.trim() || "";
     if (!text) {
@@ -726,9 +748,7 @@ function openQuickEntry() {
           <span class="text-right text-gray-900 dark:text-gray-100">${candidate.category}</span>
         </div>
       </div>`;
-
-    confirmBtn.className = "w-full mb-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium transition-colors";
-    confirmBtn.textContent = "\u786e\u8ba4\u8bb0\u5f55";
+    syncConfirmState();
   });
 
   confirmBtn?.addEventListener("click", () => {
@@ -740,14 +760,12 @@ function openQuickEntry() {
     if (candidateConfirmed) return;
 
     candidateConfirmed = true;
-    confirmBtn.disabled = true;
-    confirmBtn.className = "w-full mb-4 py-2 rounded-xl bg-teal-600/50 text-white text-xs font-medium transition-colors opacity-70 cursor-not-allowed";
-    confirmBtn.textContent = "\u5df2\u786e\u8ba4";
+    syncConfirmState();
     showToast("\u5019\u9009\u8bb0\u5f55\u5df2\u786e\u8ba4\uff08\u672a\u5165\u5e93\uff09", "success", 2000);
   });
 }
 
-// 鈹€鈹€ 鍔熻兘 鈶わ細鎵归噺琛ュ綍 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ===== 功能 ②：批量补录 =====
 
 function openBatchText() {
   const overlay = createModalOverlay();
@@ -820,7 +838,7 @@ function openBatchText() {
   });
 }
 
-// 鈹€鈹€ 鍔熻兘 鈶ワ細Shadow Sync Monitor锛堥搧寰嬩簩鏍稿績锛夆攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ===== 功能 ③：Shadow Sync Monitor（双写监控） =====
 
 async function openShadowMonitor() {
   showShadowMonitor();
@@ -834,7 +852,7 @@ async function openShadowMonitor() {
   }
 }
 
-// 鈹€鈹€ 鍐呴儴宸ュ叿 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ===== 内部工具 =====
 
 function createModalOverlay() {
   const el = document.createElement("div");
