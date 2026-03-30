@@ -83,14 +83,14 @@ function bindShellEvents() {
       if (nav === "dashboard") switchTab("stats");
       if (nav === "search") switchTab("cal");
       if (nav === "settings") {
-        showToast("璁剧疆椤靛紑鍙戜腑锛屽綋鍓嶅厛淇濈暀鍗犱綅鍏ュ彛", "info");
+        showToast("设置页开发中，当前先保留占位入口", "info");
       }
     });
   });
 
   // 双屏横幅：查看对比按钮
   document.getElementById("banner-compare-btn")?.addEventListener("click", () => {
-    showToast("鍙岀洸鏍稿锛氱偣鍑讳换鎰忚处鐩崱鐗囧彲瀵规瘮鏂版棫鍑瘉鍥剧墖", "info", 4000);
+    showToast("双屏校对：点击任意账目卡片可对比新旧凭证图片", "info", 4000);
   });
 
   // 月份切换
@@ -161,7 +161,7 @@ async function loadAndRender() {
     renderLedger(state.transactions, handleTxClick);
     updateMonthLabel();
   } catch (err) {
-    showToast(`鍔犺浇澶辫触锛?{err.message}`, "error");
+    showToast(`加载失败：${err.message}`, "error");
     state.transactions = [];
     renderLedger(state.transactions, handleTxClick);
     updateMonthLabel();
@@ -190,18 +190,6 @@ function navigateMonth(delta) {
 
 function showMonthPicker() {
   openMonthPickerPanel();
-  return;
-  // 简单 prompt（后续可替换为底部滚轮选择器）
-  const input = prompt(
-    "杈撳叆瑕佹煡鐪嬬殑鏈堜唤锛堟牸寮?YYYY-MM锛岀暀绌?鏈湀锛夛細",
-    `${state.currentYear}-${String(state.currentMonth + 1).padStart(2, "0")}`
-  );
-  if (!input) return;
-  const match = input.match(/^(\d{4})-(\d{1,2})$/);
-  if (!match) { showToast("鏍煎紡閿欒锛岃杈撳叆 YYYY-MM", "error"); return; }
-  state.currentYear  = parseInt(match[1]);
-  state.currentMonth = parseInt(match[2]) - 1;
-  loadAndRender();
 }
 
 // ===== 月份选择面板 =====
@@ -291,24 +279,24 @@ function openMonthPickerPanel() {
 async function resolveImageUrl(path) {
   try {
     if (Array.isArray(path)) path = path[0];
-    console.log("鍥剧墖璺緞:", path);
+    console.log("图片路径:", path);
     if (!path || typeof path !== "string") return null;
     if (path.startsWith("http://") || path.startsWith("https://")) {
-      console.log("瑙ｆ瀽鍚嶶RL:", path);
+      console.log("解析后 URL:", path);
       return path;
     }
 
     const { app } = getFirebaseApp();
     if (!app) {
-      console.error("getDownloadURL澶辫触: Firebase app 鏈垵濮嬪寲", path);
+      console.error("getDownloadURL 失败：Firebase app 未初始化", path);
       return null;
     }
     const storage = getStorage(app);
     const url = await getDownloadURL(ref(storage, path));
-    console.log("瑙ｆ瀽鍚嶶RL:", url);
+    console.log("解析后 URL:", url);
     return url;
   } catch (err) {
-    console.error("getDownloadURL澶辫触:", path, err);
+    console.error("getDownloadURL 失败:", path, err);
     return null;
   }
 }
@@ -408,9 +396,9 @@ async function hydrateVoucherImages(containerEl) {
   await Promise.all(imgEls.map(async (img) => {
     const candidate = img.dataset.imagePath || "";
     const finalUrl = await resolveImageUrl(candidate);
-    img.onload = () => console.log("鍥剧墖鍔犺浇鎴愬姛");
+    img.onload = () => console.log("图片加载成功");
     img.onerror = () => {
-      console.error("鍥剧墖鍔犺浇澶辫触:", img.src);
+      console.error("图片加载失败:", img.src);
       img.onerror = null;
       img.src = FALLBACK_IMAGE_URL;
     };
@@ -477,11 +465,11 @@ function showTxDetail(tx) {
     if (!confirm(`纭鍒犻櫎"${tx.summary}"锛焋`)) return;
     try {
       await deleteTransaction(tx.id);
-      showToast("宸插垹闄?", "success");
+      showToast("已删除", "success");
       overlay.remove();
       await loadAndRender();
     } catch (err) {
-      showToast(`鍒犻櫎澶辫触锛?{err.message}`, "error");
+      showToast(`删除失败：${err.message}`, "error");
     }
   });
 }
@@ -524,13 +512,13 @@ async function handleKeyAction(action) {
     case "openToolbox":           return openShadowMonitor();
 
     case "openBatchMatching":     return openBatchMatching();
-    case "openRowCorrelation":    return showToast("鎸夎妫€鏌ワ細绛涢€夋湭鍏宠仈璁板綍...", "info");
-    case "openVoucherCorrelation":return showToast("鎸夊嚟璇佹鏌ワ細鎵弿瀛ょ珛鍑瘉...", "info");
+    case "openRowCorrelation":    return showToast("按行排查：筛选未关联记录...", "info");
+    case "openVoucherCorrelation":return showToast("按凭证排查：扫描孤立凭证...", "info");
     case "openBatchText":         return openBatchText();
     case "openShadowMonitor":     return openShadowMonitor();
-    case "openDeduplication":     return showToast("鍘婚噸鎵弿鍔熻兘寮€鍙戜腑...", "info");
-    case "openConflictCourt":     return showToast("鏂娉曞涵鍔熻兘寮€鍙戜腑...", "info");
-    default:                       return showToast(`鏈煡鍔熻兘锛?{action}`, "warning");
+    case "openDeduplication":     return showToast("去重扫描功能开发中...", "info");
+    case "openConflictCourt":     return showToast("冲突裁决功能开发中...", "info");
+    default:                       return showToast(`未知功能：${action}`, "warning");
   }
 }
 
@@ -592,7 +580,7 @@ async function openBatchMatching() {
           </div>`;
 
         resultsEl.querySelector("p")?.remove(); // 绉婚櫎杩涘害鎻愮ず
-        showToast(`宸插鐞?${done}/${files.length}`, "info", 1500);
+        showToast(`已处理 ${done}/${files.length}`, "info", 1500);
       } catch (err) {
         resultsEl.innerHTML += `<p class="text-xs text-red-500">${esc(file.name)}锛?{err.message}</p>`;
       }
@@ -634,15 +622,27 @@ function openQuickEntry() {
 
   const syncConfirmState = () => {
     if (!confirmBtn) return;
+    if (!currentCandidate) {
+      confirmBtn.disabled = true;
+      confirmBtn.className = "w-full mb-4 py-2 rounded-xl bg-gray-500/40 text-white text-xs font-medium transition-colors opacity-60 cursor-not-allowed";
+      confirmBtn.classList.remove("weui-btn_primary");
+      confirmBtn.classList.add("weui-btn_default");
+      confirmBtn.textContent = "\u786e\u8ba4\u8bb0\u5f55";
+      return;
+    }
     if (candidateConfirmed) {
       confirmBtn.disabled = true;
       confirmBtn.className = "w-full mb-4 py-2 rounded-xl bg-teal-600/50 text-white text-xs font-medium transition-colors opacity-70 cursor-not-allowed";
+      confirmBtn.classList.remove("weui-btn_default");
+      confirmBtn.classList.add("weui-btn_primary");
       confirmBtn.textContent = "\u5df2\u786e\u8ba4";
       return;
     }
 
     confirmBtn.disabled = false;
     confirmBtn.className = "w-full mb-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium transition-colors";
+    confirmBtn.classList.remove("weui-btn_default");
+    confirmBtn.classList.add("weui-btn_primary");
     confirmBtn.textContent = "\u786e\u8ba4\u8bb0\u5f55";
   };
 
@@ -825,12 +825,12 @@ function openBatchText() {
             source:   "鎵归噺鏂囨湰褰曞叆",
           });
         }
-        showToast(`鎴愬姛褰曞叆 ${items.length} 绗擿`, "success");
+        showToast(`成功录入 ${items.length} 条`, "success");
         overlay.remove();
         await loadAndRender();
       });
     } catch (err) {
-      showToast(`瑙ｆ瀽澶辫触锛?{err.message}`, "error");
+      showToast(`解析失败：${err.message}`, "error");
     } finally {
       btn.disabled    = false;
       btn.textContent = "AI 鎵归噺瑙ｆ瀽";
